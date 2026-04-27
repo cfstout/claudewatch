@@ -1,0 +1,8 @@
+/claudewatch
+/cw
+/dist/build/
+.DS_Store
+*.test
+*.out
+.idea/
+.vscode/
