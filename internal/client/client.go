@@ -70,9 +70,15 @@ func (c *Client) List(status, project string) ([]state.SessionState, error) {
 	return out, c.do(req, &out)
 }
 
-// Next returns the name of the oldest pending session, or ErrNotFound if none.
-func (c *Client) Next() (string, error) {
-	req, _ := http.NewRequest(http.MethodGet, c.base+"/pending/oldest", nil)
+// Next returns the name of the oldest pending session, or ErrNotFound if
+// none. Pass `exclude` (e.g., the caller's current tmux session name) to
+// skip a session that would otherwise win.
+func (c *Client) Next(exclude string) (string, error) {
+	u := c.base + "/pending/oldest"
+	if exclude != "" {
+		u += "?exclude=" + url.QueryEscape(exclude)
+	}
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
 	var out struct {
 		Name string `json:"name"`
 	}
@@ -99,9 +105,14 @@ func (c *Client) Snooze(name string, minutes int) error {
 	return c.do(req, nil)
 }
 
-// Summary fetches aggregate counts.
-func (c *Client) Summary() (state.Summary, error) {
-	req, _ := http.NewRequest(http.MethodGet, c.base+"/summary", nil)
+// Summary fetches aggregate counts. Pass `exclude` to drop a single session
+// from the totals (typically the caller's current tmux session).
+func (c *Client) Summary(exclude string) (state.Summary, error) {
+	u := c.base + "/summary"
+	if exclude != "" {
+		u += "?exclude=" + url.QueryEscape(exclude)
+	}
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
 	var out state.Summary
 	return out, c.do(req, &out)
 }

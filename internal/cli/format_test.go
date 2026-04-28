@@ -42,6 +42,16 @@ func TestFormatSummaryTmuxPending(t *testing.T) {
 	}
 }
 
+func TestFormatSummaryTmuxIncludesNextName(t *testing.T) {
+	got := FormatSummaryTmux(state.Summary{TotalPending: 2, OldestAgeSeconds: 60, NextName: "demo-01"})
+	if !strings.Contains(got, "demo-01") {
+		t.Errorf("missing next session name in %q", got)
+	}
+	if !strings.Contains(got, "→") {
+		t.Errorf("missing arrow in %q", got)
+	}
+}
+
 func TestPrintSessionsEmptyDoesNotPanic(t *testing.T) {
 	var buf bytes.Buffer
 	PrintSessions(&buf, nil)

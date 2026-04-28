@@ -56,6 +56,7 @@ type Summary struct {
 	TotalPending     int            `json:"total_pending"`
 	ByProject        map[string]int `json:"by_project"`
 	OldestAgeSeconds int64          `json:"oldest_age_seconds"`
+	NextName         string         `json:"next_name,omitempty"`
 }
 
 // ErrNotFound is returned when a named session doesn't exist.
@@ -175,13 +176,19 @@ func matchFilter(s SessionState, f Filter) bool {
 }
 
 // PendingOldest returns the pending session with the oldest LastEvent that is
-// not currently snoozed. Used by GET /pending/oldest.
-func (s *Store) PendingOldest() (SessionState, bool) {
+// not currently snoozed and not equal to `exclude` (pass "" to disable).
+// Used by GET /pending/oldest, with the `exclude` parameter wired to the
+// caller's current tmux session so `cw next` doesn't suggest jumping to where
+// you already are.
+func (s *Store) PendingOldest(exclude string) (SessionState, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	now := s.now()
 	var oldest *SessionState
 	for _, sess := range s.sessions {
+		if sess.Name == exclude {
+			continue
+		}
 		if !sess.IsPending() {
 			continue
 		}
@@ -237,27 +244,35 @@ func (s *Store) Delete(name string) bool {
 	return true
 }
 
-// Summary returns aggregate counts. Snoozed sessions are excluded from
-// total_pending and oldest_age_seconds (they shouldn't surface in the status
-// line until the snooze expires).
-func (s *Store) Summary() Summary {
+// Summary returns aggregate counts. Snoozed sessions and the optional
+// `exclude` session are skipped — they shouldn't surface in the status line
+// (snoozed = user said not now; exclude = user is already sitting in it).
+// NextName carries the name of the oldest pending session for the tmux
+// status line to display ahead of a `prefix+N` jump.
+func (s *Store) Summary(exclude string) Summary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	now := s.now()
 	out := Summary{ByProject: map[string]int{}}
-	var oldest time.Time
+	var oldestTime time.Time
+	var oldestSess *SessionState
 	for _, sess := range s.sessions {
+		if sess.Name == exclude {
+			continue
+		}
 		if !sess.IsPending() || sess.IsSnoozed(now) {
 			continue
 		}
 		out.TotalPending++
 		out.ByProject[sess.Project]++
-		if oldest.IsZero() || sess.LastEvent.Before(oldest) {
-			oldest = sess.LastEvent
+		if oldestTime.IsZero() || sess.LastEvent.Before(oldestTime) {
+			oldestTime = sess.LastEvent
+			oldestSess = sess
 		}
 	}
-	if !oldest.IsZero() {
-		out.OldestAgeSeconds = int64(now.Sub(oldest).Seconds())
+	if !oldestTime.IsZero() {
+		out.OldestAgeSeconds = int64(now.Sub(oldestTime).Seconds())
+		out.NextName = oldestSess.Name
 	}
 	return out
 }

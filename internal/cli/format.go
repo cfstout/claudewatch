@@ -99,10 +99,16 @@ func truncateMsg(s string, n int) string {
 
 // FormatSummaryTmux renders the summary as a one-line tmux status fragment.
 // Returns empty string when nothing is pending — keeps the status line clean.
+// When NextName is present, render an arrow + the next session and its age,
+// so Clayton can see where `prefix+N` will jump before pressing it.
 func FormatSummaryTmux(sum state.Summary) string {
 	if sum.TotalPending == 0 {
 		return ""
 	}
 	age := renderAge(time.Duration(sum.OldestAgeSeconds) * time.Second)
-	return fmt.Sprintf("#[fg=red]◆%d #[fg=default]oldest %s ", sum.TotalPending, age)
+	if sum.NextName == "" {
+		return fmt.Sprintf("#[fg=red]◆%d #[fg=default]%s ", sum.TotalPending, age)
+	}
+	return fmt.Sprintf("#[fg=red]◆%d #[fg=default]→ #[fg=yellow]%s #[fg=default]%s ",
+		sum.TotalPending, sum.NextName, age)
 }

@@ -141,8 +141,9 @@ func (s *Server) handleSnoozeSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handlePendingOldest(w http.ResponseWriter, _ *http.Request) {
-	sess, ok := s.Store.PendingOldest()
+func (s *Server) handlePendingOldest(w http.ResponseWriter, r *http.Request) {
+	exclude := r.URL.Query().Get("exclude")
+	sess, ok := s.Store.PendingOldest(exclude)
 	if !ok {
 		writeError(w, http.StatusNotFound, "no pending sessions")
 		return
@@ -150,6 +151,7 @@ func (s *Server) handlePendingOldest(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"name": sess.Name})
 }
 
-func (s *Server) handleSummary(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.Store.Summary())
+func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
+	exclude := r.URL.Query().Get("exclude")
+	writeJSON(w, http.StatusOK, s.Store.Summary(exclude))
 }

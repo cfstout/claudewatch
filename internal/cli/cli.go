@@ -27,7 +27,7 @@ func Run(argv []string, baseURL string, defaultSnoozeMinutes int, stdout, stderr
 	case "pending":
 		return cmdPending(c, args, stdout, stderr)
 	case "next":
-		return cmdNext(c, stdout, stderr)
+		return cmdNext(c, args, stdout, stderr)
 	case "clear":
 		return cmdClear(c, args, stderr)
 	case "snooze":
@@ -52,11 +52,11 @@ Subcommands:
   (default)             list pending sessions (alias for `+"`pending`"+`)
   daemon [--port N]     run the daemon in the foreground
   pending [--project P] list pending sessions
-  next                  print the oldest pending session name (exit 1 if none)
+  next [--current N]    print the oldest pending session name (exit 1 if none)
   clear <name>          mark a session idle
   snooze <name> [--minutes N]
                         snooze a session (default minutes from config)
-  summary [--format tmux|json]
+  summary [--format tmux|json] [--current N]
                         aggregate counts (default: human, tmux for status line)
 `)
 }
@@ -77,8 +77,14 @@ func cmdPending(c *client.Client, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func cmdNext(c *client.Client, stdout, stderr io.Writer) int {
-	name, err := c.Next()
+func cmdNext(c *client.Client, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("next", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	current := fs.String("current", "", "exclude this session from candidates (typically #{session_name})")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	name, err := c.Next(*current)
 	if err != nil {
 		var nf client.ErrNotFound
 		if errors.As(err, &nf) {
@@ -129,10 +135,11 @@ func cmdSummary(c *client.Client, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("summary", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	format := fs.String("format", "human", "human | tmux | json")
+	current := fs.String("current", "", "exclude this session from totals (typically #{session_name})")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	sum, err := c.Summary()
+	sum, err := c.Summary(*current)
 	if err != nil {
 		// For tmux/json callers, swallow the error and emit empty output —
 		// the status line shouldn't render stack traces.

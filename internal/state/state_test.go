@@ -78,26 +78,26 @@ func TestNotifySnoozeClearNotifyCycle(t *testing.T) {
 	if err := s.Snooze("alpha", time.Minute); err != nil {
 		t.Fatalf("Snooze: %v", err)
 	}
-	if got, _ := s.PendingOldest(); got.Name != "" {
+	if got, _ := s.PendingOldest(""); got.Name != "" {
 		t.Fatalf("PendingOldest returned snoozed session: %+v", got)
 	}
 
 	// Clock advances past snooze.
 	*now = now.Add(2 * time.Minute)
-	got, ok := s.PendingOldest()
+	got, ok := s.PendingOldest("")
 	if !ok || got.Name != "alpha" {
 		t.Fatalf("PendingOldest after snooze expiry: ok=%v got=%+v", ok, got)
 	}
 
 	// Clear → no longer pending.
 	s.Clear("alpha")
-	if got, ok := s.PendingOldest(); ok {
+	if got, ok := s.PendingOldest(""); ok {
 		t.Fatalf("PendingOldest after Clear: %+v", got)
 	}
 
 	// New event → pending again, snooze gone.
 	s.Upsert("alpha", "demo", "/tmp/a", StatusInputNeeded, "still blocked")
-	got, ok = s.PendingOldest()
+	got, ok = s.PendingOldest("")
 	if !ok || got.Name != "alpha" {
 		t.Fatalf("PendingOldest after re-notify: ok=%v got=%+v", ok, got)
 	}
@@ -121,7 +121,7 @@ func TestPendingOldestPicksOldest(t *testing.T) {
 	*now = now.Add(time.Second)
 	s.Upsert("gamma", "demo", "", StatusInputNeeded, "")
 
-	got, ok := s.PendingOldest()
+	got, ok := s.PendingOldest("")
 	if !ok || got.Name != "alpha" {
 		t.Fatalf("PendingOldest = %+v, want alpha", got)
 	}
@@ -131,7 +131,7 @@ func TestPendingOldestSkipsIdle(t *testing.T) {
 	s, _ := fixedClock(time.Unix(1000, 0))
 	s.Register("alpha", "demo", "")
 	s.Register("beta", "demo", "")
-	if got, ok := s.PendingOldest(); ok {
+	if got, ok := s.PendingOldest(""); ok {
 		t.Fatalf("PendingOldest with only idle sessions: %+v", got)
 	}
 }
@@ -184,12 +184,50 @@ func TestSummaryExcludesSnoozed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sum := s.Summary()
+	sum := s.Summary("")
 	if sum.TotalPending != 1 {
 		t.Fatalf("total_pending = %d, want 1 (snoozed should be excluded)", sum.TotalPending)
 	}
 	if sum.ByProject["infra"] != 1 || sum.ByProject["demo"] != 0 {
 		t.Fatalf("by_project = %+v", sum.ByProject)
+	}
+}
+
+func TestSummaryExcludesNamedSession(t *testing.T) {
+	s, _ := fixedClock(time.Unix(1000, 0))
+	s.Upsert("here", "demo", "", StatusInputNeeded, "")
+	s.Upsert("there", "demo", "", StatusInputNeeded, "")
+
+	sum := s.Summary("here")
+	if sum.TotalPending != 1 {
+		t.Fatalf("total_pending with exclude = %d, want 1", sum.TotalPending)
+	}
+	if sum.NextName != "there" {
+		t.Fatalf("next_name = %q, want 'there'", sum.NextName)
+	}
+}
+
+func TestSummaryNextName(t *testing.T) {
+	s, now := fixedClock(time.Unix(1000, 0))
+	s.Upsert("old", "demo", "", StatusInputNeeded, "")
+	*now = now.Add(time.Second)
+	s.Upsert("newer", "demo", "", StatusInputNeeded, "")
+
+	sum := s.Summary("")
+	if sum.NextName != "old" {
+		t.Fatalf("next_name = %q, want 'old' (oldest pending)", sum.NextName)
+	}
+}
+
+func TestPendingOldestRespectsExclude(t *testing.T) {
+	s, now := fixedClock(time.Unix(1000, 0))
+	s.Upsert("here", "demo", "", StatusInputNeeded, "")
+	*now = now.Add(time.Second)
+	s.Upsert("there", "demo", "", StatusInputNeeded, "")
+
+	got, ok := s.PendingOldest("here")
+	if !ok || got.Name != "there" {
+		t.Fatalf("PendingOldest(exclude=here) = %+v, want there", got)
 	}
 }
 
@@ -199,7 +237,7 @@ func TestSummaryOldestAge(t *testing.T) {
 	*now = now.Add(30 * time.Second)
 	s.Upsert("b", "demo", "", StatusInputNeeded, "")
 	*now = now.Add(30 * time.Second) // 60s after a's event
-	sum := s.Summary()
+	sum := s.Summary("")
 	if sum.OldestAgeSeconds != 60 {
 		t.Fatalf("oldest_age_seconds = %d, want 60", sum.OldestAgeSeconds)
 	}
@@ -230,8 +268,8 @@ func TestConcurrentAccessNoRace(t *testing.T) {
 				name := "s" + string(rune('a'+id))
 				s.Upsert(name, "demo", "", StatusInputNeeded, "")
 				s.List(Filter{Status: MetaStatusPending})
-				s.Summary()
-				_, _ = s.PendingOldest()
+				s.Summary("")
+				_, _ = s.PendingOldest("")
 				if j%4 == 0 {
 					s.Clear(name)
 				}
