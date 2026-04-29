@@ -408,17 +408,17 @@ func TestFormatNotification(t *testing.T) {
 	}{
 		{
 			state.SessionState{Name: "alpha", Project: "demo", Status: state.StatusInputNeeded},
-			"Claude · demo/alpha",
+			"❓ demo · alpha",
 			"needs your input",
 		},
 		{
 			state.SessionState{Name: "alpha", Project: state.ProjectUngrouped, Status: state.StatusComplete},
-			"Claude · alpha",
+			"✅ alpha",
 			"task complete",
 		},
 		{
 			state.SessionState{Name: "alpha", Project: "", Status: state.StatusInputNeeded, LastMessage: "hi"},
-			"Claude · alpha",
+			"❓ alpha",
 			"needs your input — hi",
 		},
 	}

@@ -47,19 +47,27 @@ func (n *OSNotifier) Fire(s state.SessionState) {
 	go dispatch(title, body)
 }
 
+// formatNotification renders the banner title + body for a session event.
+// Emoji prefix encodes the status at a glance — borrowing the convention
+// from claude-notifications-go (❓ for input needed, ✅ for complete) so
+// notifications skim well in Notification Center.
 func formatNotification(s state.SessionState) (title, body string) {
-	if s.Project == state.ProjectUngrouped || s.Project == "" {
-		title = "Claude · " + s.Name
-	} else {
-		title = fmt.Sprintf("Claude · %s/%s", s.Project, s.Name)
-	}
+	var prefix string
 	switch s.Status {
 	case state.StatusInputNeeded:
+		prefix = "❓"
 		body = "needs your input"
 	case state.StatusComplete:
+		prefix = "✅"
 		body = "task complete"
 	default:
+		prefix = "·"
 		body = s.Status
+	}
+	if s.Project == state.ProjectUngrouped || s.Project == "" {
+		title = fmt.Sprintf("%s %s", prefix, s.Name)
+	} else {
+		title = fmt.Sprintf("%s %s · %s", prefix, s.Project, s.Name)
 	}
 	if s.LastMessage != "" {
 		body = body + " — " + truncate(s.LastMessage, 140)

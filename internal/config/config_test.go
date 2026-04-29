@@ -8,8 +8,24 @@ import (
 
 func TestLoadMissingFileReturnsDefaults(t *testing.T) {
 	got := Load(filepath.Join(t.TempDir(), "missing.toml"))
-	if got != Defaults() {
+	def := Defaults()
+	if got.Port != def.Port || got.DebounceSeconds != def.DebounceSeconds ||
+		got.DefaultSnoozeMinutes != def.DefaultSnoozeMinutes ||
+		got.NotificationCommand != def.NotificationCommand ||
+		got.NotificationsEnabled == nil || *got.NotificationsEnabled != true {
 		t.Fatalf("missing file should yield Defaults(), got %+v", got)
+	}
+}
+
+func TestLoadHonorsNotificationsEnabledFalse(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(`notifications_enabled = false`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := Load(path)
+	if got.NotificationsEnabled == nil || *got.NotificationsEnabled != false {
+		t.Fatalf("notifications_enabled = false not respected: %+v", got.NotificationsEnabled)
 	}
 }
 
@@ -40,7 +56,8 @@ func TestLoadMalformedReturnsDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := Load(path)
-	if got != Defaults() {
+	def := Defaults()
+	if got.Port != def.Port || got.DebounceSeconds != def.DebounceSeconds {
 		t.Fatalf("malformed file should yield Defaults(), got %+v", got)
 	}
 }

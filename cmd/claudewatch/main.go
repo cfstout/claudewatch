@@ -43,7 +43,12 @@ func runDaemon(cfg config.Config, args []string) int {
 
 	store := state.NewStore()
 	srv := server.New(store)
-	srv.Notifier = server.NewOSNotifier(time.Duration(cfg.DebounceSeconds) * time.Second)
+	if cfg.NotificationsEnabled != nil && *cfg.NotificationsEnabled {
+		srv.Notifier = server.NewOSNotifier(time.Duration(cfg.DebounceSeconds) * time.Second)
+	} else {
+		slog.Info("OS notifications disabled via config (notifications_enabled = false)")
+		// Default noopNotifier from server.New stays in place.
+	}
 	srv.DefaultSnooze = time.Duration(cfg.DefaultSnoozeMinutes) * time.Minute
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)

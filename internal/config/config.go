@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Port                       int    `toml:"port"`
 	NotificationCommand        string `toml:"notification_command"`
+	NotificationsEnabled       *bool  `toml:"notifications_enabled"`
 	DebounceSeconds            int    `toml:"debounce_seconds"`
 	DefaultSnoozeMinutes       int    `toml:"default_snooze_minutes"`
 	AutoArchiveCompleteMinutes int    `toml:"auto_archive_complete_minutes"`
@@ -26,9 +27,11 @@ type Config struct {
 // Defaults returns the baseline config used when the file is missing or
 // fields are unset.
 func Defaults() Config {
+	enabled := true
 	return Config{
 		Port:                       7777,
 		NotificationCommand:        "auto", // pick terminal-notifier if present, else osascript
+		NotificationsEnabled:       &enabled,
 		DebounceSeconds:            10,
 		DefaultSnoozeMinutes:       10,
 		AutoArchiveCompleteMinutes: 0, // 0 = never
@@ -64,13 +67,17 @@ func Load(path string) Config {
 	return merge(cfg, loaded)
 }
 
-// merge applies any non-zero fields from loaded onto base.
+// merge applies any non-zero fields from loaded onto base. NotificationsEnabled
+// is *bool so we can distinguish "unset" (keep default) from explicit false.
 func merge(base, loaded Config) Config {
 	if loaded.Port != 0 {
 		base.Port = loaded.Port
 	}
 	if loaded.NotificationCommand != "" {
 		base.NotificationCommand = loaded.NotificationCommand
+	}
+	if loaded.NotificationsEnabled != nil {
+		base.NotificationsEnabled = loaded.NotificationsEnabled
 	}
 	if loaded.DebounceSeconds != 0 {
 		base.DebounceSeconds = loaded.DebounceSeconds

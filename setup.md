@@ -154,7 +154,33 @@ curl -s --max-time 2 -X DELETE "localhost:7777/sessions/$name" >/dev/null 2>&1 |
 Skip this entirely if you don't use such a function — the daemon falls back
 gracefully and registers sessions on their first hook event.
 
-## 7. (Optional) Allow notifications during DND / Focus
+## 7. (Optional) Coordinate with other notification plugins
+
+If you have another Claude Code notification plugin registered (e.g.,
+[`claude-notifications-go`](https://github.com/777genius/claude-notifications-go)),
+both systems will fire banners for the same Stop / Notification events.
+
+Two ways to fix the duplication:
+
+**Recommended:** keep the other plugin (it's typically more featureful — keyword categorization, click-to-focus, sounds, webhooks) and silence claudewatch's banners. Edit `~/.config/claudewatch/config.toml`:
+
+```toml
+notifications_enabled = false
+```
+
+claudewatch keeps everything else (queue, status-line `◆`, dashboard, `prefix+N`); the other plugin owns the banner UX.
+
+**Alternative:** disable the other plugin. In `~/.claude/settings.json`, set its `enabledPlugins` entry to `false`, e.g.:
+
+```json
+"enabledPlugins": {
+  "claude-notifications-go@claude-notifications-go": false
+}
+```
+
+claudewatch's banners then stand alone — `❓ project · session "needs your input"` for Notification, `✅ project · session "task complete"` for Stop.
+
+## 8. (Optional) Allow notifications during DND / Focus
 
 macOS doesn't let CLI tools bypass Focus modes without an Apple-granted
 "Critical Alerts" entitlement. Two workarounds:

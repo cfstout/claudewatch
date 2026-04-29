@@ -42,10 +42,13 @@ Optional `~/.config/claudewatch/config.toml`:
 ```toml
 port = 7777
 notification_command = "auto"           # "auto" picks terminal-notifier, falls back to osascript
+notifications_enabled = true            # set false to silence claudewatch's banners (e.g., if you use claude-notifications-go)
 debounce_seconds = 10
 default_snooze_minutes = 10
 auto_archive_complete_minutes = 0       # 0 = never (reserved for v1.x; not yet enforced)
 ```
+
+If you have `claude-notifications-go` (or another notification plugin) registered as a Claude Code hook, claudewatch's banners will fire on top of it — set `notifications_enabled = false` to keep the queue / status-line / `prefix+N` workflow without duplicate banners.
 
 All fields optional; missing or malformed file falls back to defaults.
 
