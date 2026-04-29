@@ -26,8 +26,15 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleNotify processes a Claude Code hook event.
+//
 // Form: session (required), type (required: "notification"|"stop"),
-// project, worktree, message (optional).
+// project, worktree, message (optional), attended (optional).
+//
+// `attended` is non-empty when a tmux client is currently attached to the
+// originating session — i.e., I'm sitting right there. Banner still fires so
+// I get an alert if I happen to be focused elsewhere, but the queue entry
+// gets cleared immediately so prefix+N doesn't suggest jumping to the
+// session I'm already in.
 func (s *Server) handleNotify(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid form")
@@ -56,11 +63,25 @@ func (s *Server) handleNotify(w http.ResponseWriter, r *http.Request) {
 		status,
 		r.PostFormValue("message"),
 	)
+	if attendedFromForm(r) {
+		// User is sitting in this session; treat the event as already
+		// acknowledged. We still fire the banner below using the local
+		// `sess` copy (which keeps the original status + message).
+		s.Store.Clear(name)
+	}
 	// Snoozed sessions still record the event but don't trigger a popup.
 	if !sess.IsSnoozed(time.Now()) {
 		s.Notifier.Fire(sess)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// attendedFromForm interprets the `attended` form value loosely — anything
+// non-empty and not "0" counts as attended. Lets the hook send either a
+// truthy/falsy number ("0", "1", "2") or the raw output of a check command.
+func attendedFromForm(r *http.Request) bool {
+	v := r.PostFormValue("attended")
+	return v != "" && v != "0"
 }
 
 // handleRegisterSession registers an idle session (called from `dev`).

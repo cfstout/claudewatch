@@ -66,7 +66,7 @@ outside tmux and the hook would otherwise POST `session=` (empty).
     "hooks": [
       {
         "type": "command",
-        "command": "[ -n \"$TMUX\" ] && session=$(tmux display-message -p '#S' 2>/dev/null) && [ -n \"$session\" ] && curl -s --max-time 2 -X POST localhost:7777/notify --data-urlencode \"session=$session\" --data-urlencode \"type=notification\" --data-urlencode \"project=$(tmux show-options -gv @project 2>/dev/null)\" --data-urlencode \"worktree=$PWD\" --data-urlencode \"message=needs input\" >/dev/null 2>&1 || true; printf '\\a'"
+        "command": "[ -n \"$TMUX\" ] && session=$(tmux display-message -p '#S' 2>/dev/null) && [ -n \"$session\" ] && curl -s --max-time 2 -X POST localhost:7777/notify --data-urlencode \"session=$session\" --data-urlencode \"type=notification\" --data-urlencode \"project=$(tmux show-options -v @project 2>/dev/null)\" --data-urlencode \"worktree=$PWD\" --data-urlencode \"message=needs input\" --data-urlencode \"attended=$(tmux list-clients -t \\\"$session\\\" 2>/dev/null | grep -c .)\" >/dev/null 2>&1 || true; printf '\\a'"
       }
     ]
   }
@@ -76,15 +76,26 @@ outside tmux and the hook would otherwise POST `session=` (empty).
     "hooks": [
       {
         "type": "command",
-        "command": "[ -n \"$TMUX\" ] && session=$(tmux display-message -p '#S' 2>/dev/null) && [ -n \"$session\" ] && curl -s --max-time 2 -X POST localhost:7777/notify --data-urlencode \"session=$session\" --data-urlencode \"type=stop\" --data-urlencode \"project=$(tmux show-options -gv @project 2>/dev/null)\" --data-urlencode \"worktree=$PWD\" --data-urlencode \"message=task complete\" >/dev/null 2>&1 || true; printf '\\a'"
+        "command": "[ -n \"$TMUX\" ] && session=$(tmux display-message -p '#S' 2>/dev/null) && [ -n \"$session\" ] && curl -s --max-time 2 -X POST localhost:7777/notify --data-urlencode \"session=$session\" --data-urlencode \"type=stop\" --data-urlencode \"project=$(tmux show-options -v @project 2>/dev/null)\" --data-urlencode \"worktree=$PWD\" --data-urlencode \"message=task complete\" --data-urlencode \"attended=$(tmux list-clients -t \\\"$session\\\" 2>/dev/null | grep -c .)\" >/dev/null 2>&1 || true; printf '\\a'"
       }
     ]
   }
 ]
 ```
 
-The `printf '\a'` keeps the terminal bell so tmux's window-status-bell still
-flashes the originating window.
+Notes on the moving parts in that command:
+
+- `[ -n "$TMUX" ]` guard — Claude can run outside tmux; without this the hook
+  would POST `session=` (empty) and pollute daemon state.
+- `tmux show-options -v @project` (no `-g`) reads the **per-session** value
+  set by the `dev` shell function. Reading globally would cross-attribute
+  every notification to whichever session was created last.
+- `attended=$(tmux list-clients -t "$session" | grep -c .)` tells the daemon
+  whether any tmux client is currently displaying the session that fired the
+  hook. When non-zero, the daemon dispatches the macOS banner but skips
+  enqueuing — you don't need a queue entry for the session you're sitting in.
+- `printf '\a'` keeps the terminal bell so tmux's window-status-bell still
+  flashes the originating window even if you're focused elsewhere.
 
 ## 5. Wire up tmux
 

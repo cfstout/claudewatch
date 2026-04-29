@@ -319,6 +319,50 @@ func TestSummary(t *testing.T) {
 	}
 }
 
+func TestNotifyAttendedFiresBannerButDoesNotEnqueue(t *testing.T) {
+	hs, store, notifier := newTestServer(t)
+	resp := postForm(t, hs.URL, "/notify", url.Values{
+		"session":  {"alpha"},
+		"type":     {"notification"},
+		"project":  {"demo"},
+		"attended": {"1"},
+		"message":  {"needs input"},
+	})
+	mustOK(t, resp)
+
+	// Banner fires regardless of attended state.
+	if names := notifier.Names(); len(names) != 1 || names[0] != "alpha" {
+		t.Fatalf("notifier fires = %v, want [alpha]", names)
+	}
+	// But the session is idle in the store.
+	got, ok := store.Get("alpha")
+	if !ok {
+		t.Fatal("session not stored")
+	}
+	if got.Status != state.StatusIdle {
+		t.Fatalf("attended notify left status = %q, want idle", got.Status)
+	}
+	// And /pending/oldest reports nothing.
+	pendResp := get(t, hs.URL, "/pending/oldest")
+	defer pendResp.Body.Close()
+	if pendResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("attended session showed up in /pending/oldest: %d", pendResp.StatusCode)
+	}
+}
+
+func TestNotifyAttendedZeroIsTreatedAsUnattended(t *testing.T) {
+	hs, store, _ := newTestServer(t)
+	mustOK(t, postForm(t, hs.URL, "/notify", url.Values{
+		"session":  {"alpha"},
+		"type":     {"notification"},
+		"attended": {"0"},
+	}))
+	got, _ := store.Get("alpha")
+	if got.Status != state.StatusInputNeeded {
+		t.Fatalf("attended=0 should not clear; status = %q", got.Status)
+	}
+}
+
 func TestNotifySnoozedSkipsNotifier(t *testing.T) {
 	hs, _, notifier := newTestServer(t)
 	// Initial notify creates the session and fires once.
