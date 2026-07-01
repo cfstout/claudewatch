@@ -49,6 +49,26 @@ default_snooze_minutes = 30`), 0o644); err != nil {
 	}
 }
 
+func TestLoadUnreadableFileReturnsDefaults(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: chmod 0000 is still readable")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(`port = 9000`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) }) // allow TempDir cleanup
+
+	got := Load(path)
+	if got.Port != Defaults().Port {
+		t.Fatalf("unreadable file should yield Defaults(), got port=%d", got.Port)
+	}
+}
+
 func TestLoadMalformedReturnsDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
