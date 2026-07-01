@@ -52,6 +52,39 @@ func TestFormatSummaryTmuxIncludesNextName(t *testing.T) {
 	}
 }
 
+func TestTruncateMsg(t *testing.T) {
+	cases := []struct {
+		input string
+		n     int
+		want  string
+	}{
+		{"short", 60, "short"},                                        // no truncation
+		{strings.Repeat("x", 60), 60, strings.Repeat("x", 60)},        // exactly n — unchanged
+		{strings.Repeat("x", 61), 60, strings.Repeat("x", 59) + "…"},  // n+1 — truncated
+		{strings.Repeat("x", 100), 60, strings.Repeat("x", 59) + "…"}, // well over limit
+	}
+	for _, c := range cases {
+		if got := truncateMsg(c.input, c.n); got != c.want {
+			t.Errorf("truncateMsg(len=%d, n=%d) = %q, want %q", len(c.input), c.n, got, c.want)
+		}
+	}
+}
+
+func TestRenderStatusSnoozed(t *testing.T) {
+	now := time.Now()
+	active := now.Add(5 * time.Minute)
+	s := state.SessionState{Status: state.StatusInputNeeded, SnoozedUntil: &active}
+	if got := renderStatus(s, false, now); !strings.Contains(got, "snoozed") {
+		t.Errorf("active snooze should show 'snoozed', got %q", got)
+	}
+
+	past := now.Add(-1 * time.Second)
+	expired := state.SessionState{Status: state.StatusInputNeeded, SnoozedUntil: &past}
+	if got := renderStatus(expired, false, now); strings.Contains(got, "snoozed") {
+		t.Errorf("expired snooze should not show 'snoozed', got %q", got)
+	}
+}
+
 func TestPrintSessionsEmptyDoesNotPanic(t *testing.T) {
 	var buf bytes.Buffer
 	PrintSessions(&buf, nil)

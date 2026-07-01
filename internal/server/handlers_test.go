@@ -299,6 +299,78 @@ func TestDeleteRemovesSession(t *testing.T) {
 	}
 }
 
+func TestGetSessionFound(t *testing.T) {
+	hs, _, _ := newTestServer(t)
+	mustOK(t, postForm(t, hs.URL, "/notify", url.Values{
+		"session": {"alpha"}, "type": {"notification"}, "project": {"demo"},
+	}))
+
+	resp := get(t, hs.URL, "/sessions/alpha")
+	var got state.SessionState
+	decode(t, resp, &got)
+	if got.Name != "alpha" {
+		t.Fatalf("Name = %q, want alpha", got.Name)
+	}
+	if got.Status != state.StatusInputNeeded {
+		t.Fatalf("Status = %q, want input_needed", got.Status)
+	}
+}
+
+func TestGetSessionNotFound(t *testing.T) {
+	hs, _, _ := newTestServer(t)
+	resp := get(t, hs.URL, "/sessions/doesnotexist")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] == "" {
+		t.Fatal("expected non-empty error message in body")
+	}
+}
+
+func TestSnoozeInvalidJSONBody(t *testing.T) {
+	hs, _, _ := newTestServer(t)
+	mustOK(t, postForm(t, hs.URL, "/notify", url.Values{
+		"session": {"alpha"}, "type": {"notification"},
+	}))
+
+	resp, err := http.Post(hs.URL+"/sessions/alpha/snooze", "application/json", strings.NewReader(`{not valid json`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "invalid JSON body" {
+		t.Fatalf("error = %q, want 'invalid JSON body'", body["error"])
+	}
+}
+
+func TestRegisterSessionMissingNameRejected(t *testing.T) {
+	hs, _, _ := newTestServer(t)
+	resp := postForm(t, hs.URL, "/sessions", url.Values{"project": {"demo"}})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "missing session" {
+		t.Fatalf("error = %q, want 'missing session'", body["error"])
+	}
+}
+
 func TestSummary(t *testing.T) {
 	hs, _, _ := newTestServer(t)
 	mustOK(t, postForm(t, hs.URL, "/notify", url.Values{
